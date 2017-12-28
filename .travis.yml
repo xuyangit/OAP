@@ -15,4 +15,4 @@ script:
   - echo "current directory:"`pwd`
   - $SPARK_HOME/sbin/start-master.sh --ip localhost --port 7077
   - $SPARK_HOME/sbin/start-slave.sh spark://localhost:7077
-  - mvn test -q
+  - mvn test -q -e
