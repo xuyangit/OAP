@@ -1,2 +1,15 @@
 language: java
-script: mvn test
+install:
+  # Download Spark 2.1.0 for Hadoop-2.7
+  - "[ -f spark ] || mkdir spark && cd spark && wget https://archive.apache.org/dist/spark/spark-2.1.0/spark-2.1.0-bin-hadoop2.7.tgz && cd .."
+  - "tar -xf ./spark/spark-2.1.0-bin-hadoop2.7.tgz"
+  - "export SPARK_HOME=`pwd`/spark-2.1.0-bin-hadoop2.7"
+  - echo "spark.yarn.jars=$SPARK_HOME/jars/*.jar" > $SPARK_HOME/conf/spark-defaults.conf
+  - echo "localhost" > $SPARK_HOME/conf/slaves
+  - echo "export SPARK_MASTER_IP=127.0.0.1" > $SPARK_HOME/conf/spark-env.sh
+  - source $SPARK_HOME/conf/spark-env.sh
+script:
+  - echo "current directory: "`pwd`
+  - $SPARK_HOME/sbin/start-master.sh --ip localhost --port 7077
+  - $SPARK_HOME/sbin/start-slave.sh spark://localhost:7077
+  - mvn test
