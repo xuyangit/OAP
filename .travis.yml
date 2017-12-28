@@ -1,4 +1,7 @@
 language: java
+cache:
+  directories:
+    - $HOME/.m2
 install:
   # Download Spark 2.1.0 for Hadoop-2.7
   - "[ -f spark ] || mkdir spark && cd spark && wget https://archive.apache.org/dist/spark/spark-2.1.0/spark-2.1.0-bin-hadoop2.7.tgz && cd .."
@@ -12,4 +15,4 @@ script:
   - echo "current directory:"`pwd`
   - $SPARK_HOME/sbin/start-master.sh --ip localhost --port 7077
   - $SPARK_HOME/sbin/start-slave.sh spark://localhost:7077
-  - mvn test
+  - mvn test -q
