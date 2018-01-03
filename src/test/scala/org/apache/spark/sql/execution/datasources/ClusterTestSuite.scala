@@ -44,8 +44,6 @@ class ClusterTestSuite extends QueryTest with ClusterTestContext {
     assert((s"wget -q -t ${wgetRetryTimes} -P ${workDir}" +
       s" https://archive.apache.org/dist/spark/spark-2.1.0/${sparkVersion}.tgz" !) == 0)
     assert((s"tar -xf ${workDir}/${sparkVersion}.tgz -C ${workDir}" !) == 0)
-    assert((("echo \"spark.yarn.jars=" + sparkHome + "/jars/*.jar\" > " +
-      sparkHome + "/conf/spark-defaults.conf") !) == 0)
     assert(("echo \"localhost\" > " + s"${sparkHome}/conf/slaves" !) == 0)
     assert((s"${sparkHome}/sbin/start-master.sh --ip localhost --port 7077" #&&
       s"${sparkHome}/sbin/start-slave.sh spark://localhost:7077" !) == 0)
