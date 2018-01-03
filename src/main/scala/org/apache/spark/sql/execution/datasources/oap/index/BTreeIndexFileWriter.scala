@@ -41,7 +41,7 @@ private case class BTreeIndexFileWriter(
 
   private lazy val writer = file.getFileSystem(configuration).create(file, true)
 
-  private var rowIdListSize = 0
+  private var rowIdListSize = 0L
   private var footerSize = 0
 
   def start(): Unit = {
@@ -63,7 +63,7 @@ private case class BTreeIndexFileWriter(
   }
 
   def end(): Unit = {
-    IndexUtils.writeInt(writer, rowIdListSize)
+    IndexUtils.writeLong(writer, rowIdListSize)
     IndexUtils.writeInt(writer, footerSize)
   }
 

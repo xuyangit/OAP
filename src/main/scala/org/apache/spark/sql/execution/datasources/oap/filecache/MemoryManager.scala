@@ -153,7 +153,7 @@ private[oap] object MemoryManager extends Logging {
   def memoryUsed: Long = _memoryUsed.get()
   def maxMemory: Long = _maxMemory
 
-  private[filecache] def allocate(numOfBytes: Int): MemoryBlock = {
+  private[filecache] def allocate(numOfBytes: Long): MemoryBlock = {
     _memoryUsed.getAndAdd(numOfBytes)
     logDebug(s"allocate $numOfBytes memory, used: $memoryUsed")
     MemoryAllocator.UNSAFE.allocate(numOfBytes)
@@ -165,19 +165,28 @@ private[oap] object MemoryManager extends Logging {
     logDebug(s"freed ${memoryBlock.size()} memory, used: $memoryUsed")
   }
 
-  // Used by IndexFile
+  // Used by IndexFile, modified as multi-read to load large row list (2G)
   // TODO: putToFiberCache(in: Stream, position: Long, length: Int, type: FiberType)
-  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Int): IndexFiberCache = {
-    val bytes = new Array[Byte](length)
-    in.readFully(position, bytes)
-
-    val memoryBlock = allocate(bytes.length)
-    Platform.copyMemory(
-      bytes,
-      Platform.BYTE_ARRAY_OFFSET,
-      memoryBlock.getBaseObject,
-      memoryBlock.getBaseOffset,
-      bytes.length)
+  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Long): IndexFiberCache = {
+    val memoryBlock = allocate(length)
+    var fileCurPos = position
+    var bytesToRead = length
+    var blockOffset = memoryBlock.getBaseOffset
+    while(bytesToRead > 0) {
+      // The maximum size of array depends on JVM implementation, (Int.MaxValue - 10) is safe enough
+      val bytes = new Array[Byte](math.min(Int.MaxValue - 10, bytesToRead).toInt)
+      in.readFully(fileCurPos, bytes)
+      Platform.copyMemory(
+        bytes,
+        Platform.BYTE_ARRAY_OFFSET,
+        memoryBlock.getBaseObject,
+        blockOffset,
+        bytes.length
+      )
+      bytesToRead -= bytes.length
+      blockOffset += bytes.length
+      fileCurPos += bytes.length
+    }
     IndexFiberCache(memoryBlock)
   }
 
