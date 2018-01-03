@@ -198,9 +198,11 @@ private[index] case class BTreeIndexRecordWriter(
    * Then Row Id List is Stored as: 0481592637
    */
   private def serializeAndWriteRowIdLists(uniqueKeys: Seq[InternalRow]): Unit = {
-    uniqueKeys.foreach(
-      key => multiHashMap.get(key).asScala.foreach(
-      x => fileWriter.writeRowIdList(IndexUtils.writeInt(x))))
+    uniqueKeys.foreach { key =>
+      multiHashMap.get(key).asScala.foreach(x =>
+        fileWriter.writeRowId(IndexUtils.toBytes(x))
+      )
+    }
   }
 
   /**
