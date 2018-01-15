@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.execution.datasources.oap.filecache
 
+import java.util
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.hadoop.fs.FSDataInputStream
-
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.memory.MemoryMode
@@ -153,7 +153,7 @@ private[oap] object MemoryManager extends Logging {
   def memoryUsed: Long = _memoryUsed.get()
   def maxMemory: Long = _maxMemory
 
-  private[filecache] def allocate(numOfBytes: Int): MemoryBlock = {
+  private[filecache] def allocate(numOfBytes: Long): MemoryBlock = {
     _memoryUsed.getAndAdd(numOfBytes)
     logDebug(s"allocate $numOfBytes memory, used: $memoryUsed")
     MemoryAllocator.UNSAFE.allocate(numOfBytes)
@@ -170,7 +170,6 @@ private[oap] object MemoryManager extends Logging {
   def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Int): IndexFiberCache = {
     val bytes = new Array[Byte](length)
     in.readFully(position, bytes)
-
     val memoryBlock = allocate(bytes.length)
     Platform.copyMemory(
       bytes,

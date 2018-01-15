@@ -353,7 +353,10 @@
           <failOnViolation>true</failOnViolation>
           <includeTestSourceDirectory>false</includeTestSourceDirectory>
           <failOnWarning>false</failOnWarning>
-          <sourceDirectory>src/main/scala</sourceDirectory>
+          <sourceDirectory>
+            <dir>src/main/scala</dir>
+            <dir>oap-perf/src/main/scala</dir>
+          </sourceDirectory>
           <testSourceDirectory>src/test/scala</testSourceDirectory>
           <configLocation>scalastyle-config.xml</configLocation>
           <outputFile>target/scalastyle-output.xml</outputFile>
