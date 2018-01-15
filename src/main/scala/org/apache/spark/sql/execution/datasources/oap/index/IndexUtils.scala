@@ -31,14 +31,17 @@ import org.apache.spark.sql.execution.datasources.oap.io.IndexFile
  */
 private[oap] object IndexUtils {
 
-  def writeHead(writer: OutputStream, version: Int): Int = {
-    val headerContent = "OAPIDX"
-    writer.write(headerContent.getBytes("UTF-8"))
-    assert(version <= 65535)
-    val versionData = Array((version >> 8).toByte, (version & 0xFF).toByte)
+  def serializeVersion(versionNum: Int): Array[Byte] = {
+    assert(versionNum <= 65535)
+    IndexFile.VERSION_PREFIX.getBytes("UTF-8") ++
+      Array((versionNum >> 8).toByte, (versionNum & 0xFF).toByte)
+  }
+
+  def writeHead(writer: OutputStream, versionNum: Int): Int = {
+    val versionData = serializeVersion(versionNum)
+    assert(versionData.length == IndexFile.VERSION_LENGTH)
     writer.write(versionData)
-    assert((headerContent.length + versionData.length) == IndexFile.indexFileHeaderLength)
-    IndexFile.indexFileHeaderLength
+    IndexFile.VERSION_LENGTH
   }
 
   def indexFileFromDataFile(dataFile: Path, name: String, time: String): Path = {
@@ -64,9 +67,15 @@ private[oap] object IndexUtils {
 
   def writeByte(out: OutputStream, v: Int): Unit = out.write(v)
 
+  def writeBytes(out: OutputStream, b: Array[Byte]): Unit = out.write(b)
+
   def writeShort(out: OutputStream, v: Int): Unit = {
     out.write(v >>> 0 & 0XFF)
     out.write(v >>> 8 & 0xFF)
+  }
+
+  def toBytes(v: Int): Array[Byte] = {
+    Array(0, 8, 16, 24).map(shift => ((v >>> shift) & 0XFF).toByte)
   }
 
   def writeInt(out: OutputStream, v: Int): Unit = {
@@ -101,7 +110,8 @@ private[oap] object IndexUtils {
   val LONG_SIZE = 8
 
   /**
-   * Constrain: keys.last >= candidate must be true. This is guaranteed by [[findNodeIdx]]
+   * Constrain: keys.last >= candidate must be true. This is guaranteed
+   * by [[BTreeIndexRecordReader.findNodeIdx]]
    * @return the first key >= candidate. (keys.last >= candidate makes this always possible)
    */
   def binarySearch(

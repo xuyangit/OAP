@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateOrdering
 import org.apache.spark.sql.execution.datasources.OapException
+import org.apache.spark.sql.execution.datasources.oap.io.IndexFile
 import org.apache.spark.sql.execution.datasources.oap.statistics.StatisticsWriteManager
 import org.apache.spark.sql.execution.datasources.oap.utils.{BTreeNode, BTreeUtils, NonNullKeyWriter}
 import org.apache.spark.sql.types._
@@ -145,8 +146,7 @@ private[index] case class BTreeIndexRecordWriter(
       else BTreeNodeMetaData(rowCount, nodeBuf.length, nodeUniqueKeys.head, nodeUniqueKeys.last)
     }
     // Write Row Id List
-    fileWriter.writeRowIdList(serializeRowIdLists(nonNullUniqueKeys ++ nullKeys))
-
+    serializeAndWriteRowIdLists(nonNullUniqueKeys ++ nullKeys)
     // Write Footer
     val nullKeyRowCount = nullKeys.map(multiHashMap.get(_).size()).sum
     fileWriter.writeFooter(serializeFooter(nullKeyRowCount, nodes))
@@ -197,16 +197,18 @@ private[index] case class BTreeIndexRecordWriter(
    * Key:    1 2 3 4 1 2 3 4 1 2
    * Then Row Id List is Stored as: 0481592637
    */
-  private def serializeRowIdLists(uniqueKeys: Seq[InternalRow]): Array[Byte] = {
-    val buffer = new ByteArrayOutputStream()
-    uniqueKeys.flatMap(key =>
-      multiHashMap.get(key).asScala).foreach(IndexUtils.writeInt(buffer, _))
-    buffer.toByteArray
+  private def serializeAndWriteRowIdLists(uniqueKeys: Seq[InternalRow]): Unit = {
+    uniqueKeys.foreach { key =>
+      multiHashMap.get(key).asScala.foreach(x =>
+        fileWriter.writeRowId(IndexUtils.toBytes(x))
+      )
+    }
   }
 
   /**
    * Layout of Footer:
    * Field Description              Byte Size
+   * Index Version Number           4 Bytes
    * Row Count with Non-Null Key    4 Bytes
    * Row Count With Null Key        4 Bytes
    * Node Count                     4 Bytes
@@ -216,6 +218,9 @@ private[index] case class BTreeIndexRecordWriter(
    * Size In Byte                     4 Bytes
    * Min Key Pos in Key Data          4 Bytes
    * Max Key Pos in Key Data          4 Bytes
+   *
+   * Statistic info Size              4 Bytes
+   * Statistic Info                   X Bytes
    * Key Data - Variable Bytes      M
    * Min Key For Child #1 - Min
    * Max Key For Child #1
@@ -229,6 +234,8 @@ private[index] case class BTreeIndexRecordWriter(
     val keyBuffer = new ByteArrayOutputStream()
     val statsBuffer = new ByteArrayOutputStream()
 
+    // Index File Version Number
+    IndexUtils.writeInt(buffer, IndexFile.VERSION_NUM)
     // Record Count(all with non-null key) of all nodes in B+ tree
     IndexUtils.writeInt(buffer, nodes.map(_.rowCount).sum)
     // Count of Record(s) that have null key

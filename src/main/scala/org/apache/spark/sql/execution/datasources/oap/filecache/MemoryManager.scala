@@ -153,7 +153,7 @@ private[oap] object MemoryManager extends Logging {
   def memoryUsed: Long = _memoryUsed.get()
   def maxMemory: Long = _maxMemory
 
-  private[filecache] def allocate(numOfBytes: Int): MemoryBlock = {
+  private[filecache] def allocate(numOfBytes: Long): MemoryBlock = {
     _memoryUsed.getAndAdd(numOfBytes)
     logDebug(s"allocate $numOfBytes memory, used: $memoryUsed")
     MemoryAllocator.UNSAFE.allocate(numOfBytes)
@@ -167,8 +167,8 @@ private[oap] object MemoryManager extends Logging {
 
   // Used by IndexFile
   // TODO: putToFiberCache(in: Stream, position: Long, length: Int, type: FiberType)
-  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Long): IndexFiberCache = {
-    val bytes = new Array[Byte](length.toInt)
+  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Int): IndexFiberCache = {
+    val bytes = new Array[Byte](length)
     in.readFully(position, bytes)
     val memoryBlock = allocate(bytes.length)
     Platform.copyMemory(
