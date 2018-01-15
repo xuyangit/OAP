@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.execution.datasources.oap.filecache
 
+import java.util
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.hadoop.fs.FSDataInputStream
-
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.memory.MemoryMode
@@ -167,10 +167,9 @@ private[oap] object MemoryManager extends Logging {
 
   // Used by IndexFile
   // TODO: putToFiberCache(in: Stream, position: Long, length: Int, type: FiberType)
-  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Int): IndexFiberCache = {
-    val bytes = new Array[Byte](length)
+  def putToIndexFiberCache(in: FSDataInputStream, position: Long, length: Long): IndexFiberCache = {
+    val bytes = new Array[Byte](length.toInt)
     in.readFully(position, bytes)
-
     val memoryBlock = allocate(bytes.length)
     Platform.copyMemory(
       bytes,
