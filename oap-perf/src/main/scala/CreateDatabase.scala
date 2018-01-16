@@ -24,7 +24,7 @@ import org.apache.spark.sql.functions._
 object CreateDatabaseApp {
 
   def main(args: Array[String]) {
-    if (args.length < 3) {
+    if (args.length < 4) {
       sys.error("Please config the arguments for testing!")
     }
     // e.g., 2 for 0.2.0

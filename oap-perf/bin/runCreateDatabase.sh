@@ -11,5 +11,5 @@ ${sparkPath}/bin/spark-submit \
 	$benchmarkJarPath \
 	$oapVersionNum \
 	$dataScale \
-	$testTrie
-	1> $tableInfo
+	$testTrie \
+	1> $fileInfoPath

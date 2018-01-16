@@ -23,7 +23,7 @@ import org.apache.spark.sql.SparkSession
 
 object BenchmarkTest {
   def main(args: Array[String]) {
-    if (args.length < 5) {
+    if (args.length < 6) {
       sys.error("Please config the arguments for testing!")
     }
     // e.g., 2 for 0.2.0
