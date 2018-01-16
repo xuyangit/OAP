@@ -58,29 +58,29 @@ object CreateDatabaseApp {
       spark.sql("drop table if exists customer")
       spark.sql("drop table if exists store_sales")
       if(testTrie == "true" && hadoopFs.exists(new Path(dataLocation + "customer"))) {
-        val df = spark.read.format("oap").load(dataLocation + "customer")
+        val df = spark.read.format(dataFormat).load(dataLocation + "customer")
           .filter("c_email_address is not null")
-        df.write.format("oap").mode(SaveMode.Overwrite).save(dataLocation + "customer1")
+        df.write.format(dataFormat).mode(SaveMode.Overwrite).save(dataLocation + "customer1")
         hadoopFs.delete(new Path(dataLocation + "customer/"), true)
         FileUtil.copy(hadoopFs, new Path(dataLocation + "customer1"),
           hadoopFs, new Path(dataLocation + "customer"), true, conf)
         sqlContext.createExternalTable("customer", dataLocation + "customer", dataFormat)
       }
-      var df = spark.read.format("oap").load(dataLocation + "store_sales")
+      var df = spark.read.format(dataFormat).load(dataLocation + "store_sales")
       val divRatio = df.select("ss_item_sk").orderBy(desc("ss_item_sk")).limit(1).
         collect()(0)(0).asInstanceOf[Int] / 1000
       val divideUdf = udf((s: Int) => s / divRatio)
-      df.withColumn("ss_item_sk1", divideUdf(col("ss_item_sk"))).write.format("oap")
+      df.withColumn("ss_item_sk1", divideUdf(col("ss_item_sk"))).write.format(dataFormat)
         .mode(SaveMode.Overwrite).save(dataLocation + "store_sales1")
       hadoopFs.delete(new Path(dataLocation + "store_sales"), true)
       FileUtil.copy(hadoopFs, new Path(dataLocation + "store_sales1"),
         hadoopFs, new Path(dataLocation + "store_sales"), true, conf)
-      sqlContext.createExternalTable("store_sales", dataLocation + "store_sales", "oap")
+      sqlContext.createExternalTable("store_sales", dataLocation + "store_sales", dataFormat)
       println("File size of orignial table store_sales in oap format: " +
-        TestUtil.calculateFileSize("store_sales", dataLocation, "oap")
+        TestUtil.calculateFileSize("store_sales", dataLocation, dataFormat)
       )
       println("Records of table store_sales: " +
-        spark.read.format("oap").load(dataLocation + "store_sales").count()
+        spark.read.format(dataFormat).load(dataLocation + "store_sales").count()
       )
     }
 

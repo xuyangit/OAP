@@ -10,6 +10,7 @@ ${sparkPath}/bin/spark-submit \
 	--deploy-mode client \
 	$benchmarkJarPath \
 	$oapVersionNum \
+	$benchmarkFormats \
 	$dataScale \
 	$testTrie \
 	1> $fileInfoPath
