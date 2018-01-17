@@ -20,6 +20,8 @@ ${sparkPath}/bin/spark-submit \
 	$dataScale \
 	$useIndexes \
 	$indexFlag \
+	$testOapStrategy \
+	$enableStatistic \
 	$benchmarkTestTimes \
 	> $benchmarkResPath
 # for profiler use

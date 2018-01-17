@@ -23,7 +23,7 @@ import org.apache.spark.sql.SparkSession
 
 object BenchmarkTest {
   def main(args: Array[String]) {
-    if (args.length < 6) {
+    if (args.length < 8) {
       sys.error("Please config the arguments for testing!")
     }
     // e.g., 2 for 0.2.0
@@ -49,57 +49,36 @@ object BenchmarkTest {
 
     // 7=111 to test all indexes, 5=101 to test B-tree and trie, 6=110 to test B-tree and Bitmap
     val indexFlags = args(4).toInt
-    val testTimes = args(5).toInt
+
+    // enable to test Oap strategies
+    val testStrategy = args(5)
+
+    // enable use of statistics manager
+    val enableStatistics = args(6)
+
+    val testTimes = args(7).toInt
 
     if(testTimes < 1) sys.error("Test times should be positive!")
 
-    Array(1, 2, 4).foreach(indexMask => {
-      if ((indexMask & indexFlags) > 0) {
-        println(indexMask match {
-          case 1 => "Test results of Trie index:"
-          case 2 => "Test results of Bitmap index:"
-          case 4 => "Test results of Btree index:"
-        })
-        val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
-        var queryNums = 0
-        dataFormats.foreach(dataFormat => {
-          useIndexes.foreach(useIndex => {
-            implicit val spark = SparkSession.builder.appName(s"OAP-Test-${versionNum}.0")
-              .enableHiveSupport().getOrCreate()
-            spark.sqlContext.setConf("spark.sql.oap.oindex.enabled", s"${useIndex}")
-            spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
-            spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
-            resMap.put(s"${dataFormat}-${useIndex}", indexMask match {
-              case 1 => (1 to testTimes).map(_ => testForTrieIndex(useIndex))
-              case 2 => (1 to testTimes).map(_ => testForBitmapIndex(useIndex))
-              case _ => (1 to testTimes).map(_ => testForBtreeIndex(useIndex))
-            })
-            queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
-            spark.stop()
-            assert(("rm -f ./metastore_db/db.lck" !) == 0)
-            assert(("rm -f ./metastore_db/dbex.lck" !) == 0)
-            assert(("sync" !) == 0)
-            var dropCacheCmd: Seq[String] = Seq("bash", "-c", "echo 3 > /proc/sys/vm/drop_caches")
-            assert(dropCacheCmd.! == 0)
-          })
-        })
-        val res = dataFormats.flatMap(dataFormat =>
-          useIndexes.map(useIndex =>
-            (s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
-              resMap.get(s"${dataFormat}-${useIndex}").get)
-          )
-        )
-        for(i <- 1 to queryNums) {
-          val header = Seq(s"Q${i}") ++ (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Avg/ms")
-          val content = res.map(x =>
-            Seq(x._1) ++ x._2.map(_(i - 1)) ++ Seq(x._2.map(_(i - 1)).sum / testTimes)
-          )
-          println(Tabulator.format(Seq(header) ++ content))
-        }
-      }
-    })
+    def getSession(useIndex: Boolean): SparkSession = {
+      val spark = SparkSession.builder.appName(s"OAP-Test-${versionNum}.0")
+        .enableHiveSupport().getOrCreate()
+      spark.sqlContext.setConf("spark.sql.oap.oindex.enabled", s"${useIndex}")
+      spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
+      spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", enableStatistics)
+      spark
+    }
 
-    def testForBtreeIndex(useIndex: Boolean)(implicit spark: SparkSession) : ArrayBuffer[Int] = {
+    def cleanAfterEach(spark: SparkSession) = {
+      spark.stop()
+      assert(("rm -f ./metastore_db/db.lck" !) == 0)
+      assert(("rm -f ./metastore_db/dbex.lck" !) == 0)
+      assert(("sync" !) == 0)
+      var dropCacheCmd: Seq[String] = Seq("bash", "-c", "echo 3 > /proc/sys/vm/drop_caches")
+      assert(dropCacheCmd.! == 0)
+    }
+
+    def testForBtreeIndex(spark: SparkSession): ArrayBuffer[Int] = {
       // B-tree index on $d table store_sales (ss_ticket_number)
       val table = "store_sales"
       val attr = "ss_ticket_number"
@@ -134,7 +113,64 @@ object BenchmarkTest {
         s"ss_net_paid > 100.0 AND ss_net_paid < 110.0 AND ss_list_price < 100.0").foreach{ _ => })
       resList
     }
-    def testForTrieIndex(useIndex: Boolean)(implicit spark: SparkSession) : ArrayBuffer[Int] = {
+
+    def testOapStrategy(spark: SparkSession): ArrayBuffer[Int] = {
+      val table = "store_sales"
+      val btreeIndexAttr = "ss_ticket_number"
+      val bitmapIndexAttr = "ss_item_sk1"
+      val lsRange = (1 to 10).mkString(",")
+      val msRange = (1 to 5).mkString(",")
+      implicit val resList = ArrayBuffer[Int]()
+      // OapSortLimitStrategy query, this works for B-Tree only
+      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $btreeIndexAttr > 100 AND" +
+        s" $btreeIndexAttr < 1000 ORDER BY $btreeIndexAttr LIMIT 100").foreach{ _ => })
+      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table ORDER BY $btreeIndexAttr" +
+        " LIMIT 10000").foreach{ _ => })
+      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $btreeIndexAttr BETWEEN 3000 AND" +
+        s" 20000 ORDER BY $btreeIndexAttr LIMIT 100000").foreach{ _ => })
+      // OAPSemiJoinStrategy query, this works for Bitmap only
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT * FROM $table s1 WHERE EXISTS " +
+            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
+            s"AND s1.$bitmapIndexAttr IN ( $lsRange ))"
+        ).foreach{ _ => }
+      )
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT * FROM $table s1 WHERE EXISTS " +
+            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
+            s"AND s1.$bitmapIndexAttr IN ( $msRange ))"
+        ).foreach{ _ => }
+      )
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT * FROM $table s1 WHERE EXISTS " +
+            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
+            s"AND s1.$bitmapIndexAttr = 25)"
+        ).foreach{ _ => }
+      )
+      // OapGroupAggregateStrategy query, this works for both
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT $btreeIndexAttr, max(${bitmapIndexAttr}) FROM $table " +
+            s"WHERE $bitmapIndexAttr IN ( $msRange ) AND " +
+            s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
+            s"GROUP BY $bitmapIndexAttr"
+        ).foreach{ _ => }
+      )
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT $bitmapIndexAttr, max(${btreeIndexAttr}) FROM $table " +
+            s"WHERE $bitmapIndexAttr = 20 AND " +
+            s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
+            s"GROUP BY $btreeIndexAttr"
+        ).foreach{ _ => }
+      )
+      resList
+    }
+
+    def testForTrieIndex(spark: SparkSession): ArrayBuffer[Int] = {
       val table = "customer"
       val attr = "c_email_address"
       implicit val resList = ArrayBuffer[Int]()
@@ -166,7 +202,7 @@ object BenchmarkTest {
       resList
     }
 
-    def testForBitmapIndex(useIndex: Boolean)(implicit spark: SparkSession) : ArrayBuffer[Int] = {
+    def testForBitmapIndex(spark: SparkSession): ArrayBuffer[Int] = {
       // Bitmap index on $d table store_sales (ss_item_sk)
       val table = "store_sales"
       val attr = "ss_item_sk1"
@@ -201,6 +237,51 @@ object BenchmarkTest {
         s"ss_net_paid > 100.0 AND ss_net_paid < 200.0 AND ss_list_price < 100.0").foreach{ _ => })
       resList
     }
+
+    // basic queries for data format + index type + use index / baseline
+    Array(1, 2, 4).foreach(indexMask => {
+      if ((indexMask & indexFlags) > 0) {
+        println(indexMask match {
+          case 1 => "Test results of Trie index:"
+          case 2 => "Test results of Bitmap index:"
+          case 4 => "Test results of Btree index:"
+        })
+        val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
+        var queryNums = 0
+        dataFormats.foreach(dataFormat => {
+          useIndexes.foreach(useIndex => {
+            val spark = getSession(useIndex)
+            spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
+            resMap.put(s"${dataFormat}-${useIndex}", indexMask match {
+              case 1 => (1 to testTimes).map(_ => testForTrieIndex(spark))
+              case 2 => (1 to testTimes).map(_ => testForBitmapIndex(spark))
+              case _ => (1 to testTimes).map(_ => testForBtreeIndex(spark))
+            })
+            queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
+            cleanAfterEach(spark)
+          })
+        })
+        TestUtil.formatResults(dataFormats, useIndexes, resMap, queryNums, testTimes)
+      }
+    })
+
+    // Oap strategies only work for Oap data format
+    if (testStrategy == "true" && dataFormats.contains("oap")) {
+      println("Test results of Oap Strategies:")
+      val dataFormat = "oap"
+      val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
+      var queryNums = 0
+      useIndexes.foreach(useIndex => {
+        val spark = getSession(useIndex)
+        spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
+        resMap.put(s"${dataFormat}-${useIndex}", (1 to testTimes)
+          .map(_ => testOapStrategy(spark)))
+        queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
+        cleanAfterEach(spark)
+      })
+      TestUtil.formatResults(Seq("oap"), useIndexes, resMap, queryNums, testTimes)
+    }
+
 
   }
 }

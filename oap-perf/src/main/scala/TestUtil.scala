@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, PathFilter}
@@ -68,17 +68,43 @@ object TestUtil {
     val size = path.getFileSystem(conf).listStatus(path, filter).map(_.getLen).sum
     convertFileSize(size)
   }
+
   def time[T](code: => T, action: String): Unit = {
     val t0 = System.nanoTime
     code
     val t1 = System.nanoTime
     println(action + ((t1 - t0) / 1000000))
   }
+
   def queryTime[T](code: => T)(implicit resList: ArrayBuffer[Int]): Unit = {
     val t0 = System.nanoTime
     code
     val t1 = System.nanoTime
     resList.append(((t1 - t0) / 1000000).toInt)
+  }
+
+  def median(s: Seq[Int]): Int = {
+    val sortSeq = s.sortWith(_ < _)
+    if (s.length % 2 == 0) (s(s.length / 2 - 1) + s(s.length / 2)) / 2
+    else s(s.length / 2)
+  }
+
+  def formatResults(dataFormats: Seq[String], useIndexes: Seq[Boolean],
+                    resMap: HashMap[String, Seq[ArrayBuffer[Int]]],
+                    queryNums: Int, testTimes: Int): Unit = {
+    val res = dataFormats.flatMap(dataFormat =>
+      useIndexes.map(useIndex =>
+        (s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
+          resMap.get(s"${dataFormat}-${useIndex}").get)
+      )
+    )
+    for(i <- 1 to queryNums) {
+      val header = Seq(s"Q${i}") ++ (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Median/ms")
+      val content = res.map(x =>
+        Seq(x._1) ++ x._2.map(_(i - 1)) ++ Seq(median(x._2.map(_(i - 1))))
+      )
+      println(Tabulator.format(Seq(header) ++ content))
+    }
   }
 }
 

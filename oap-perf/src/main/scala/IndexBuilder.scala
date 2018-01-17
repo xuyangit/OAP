@@ -39,7 +39,7 @@ object IndexBuilderApp {
       enableHiveSupport().getOrCreate()
     spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
 
-    def buildBtreeIndex(tablePath: String) : Unit = {
+    def buildBtreeIndex(tablePath: String): Unit = {
       val table = "store_sales"
       val attr = "ss_ticket_number"
       try {
@@ -58,7 +58,7 @@ object IndexBuilderApp {
       }
     }
 
-    def buildTrieIndex(tablePath: String) : Unit = {
+    def buildTrieIndex(tablePath: String): Unit = {
       val table = "customer"
       val attr = "c_email_address"
       try {
@@ -77,7 +77,7 @@ object IndexBuilderApp {
       }
     }
 
-    def buildBitmapIndex(tablePath: String) : Unit = {
+    def buildBitmapIndex(tablePath: String): Unit = {
       val table = "store_sales"
       val attr = "ss_item_sk1"
       try {
