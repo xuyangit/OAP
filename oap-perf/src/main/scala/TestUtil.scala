@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+package org.apache.spark.sql.oap.perf
+
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.hadoop.conf.Configuration
@@ -85,20 +87,13 @@ object TestUtil {
 
   def median(s: Seq[Int]): Int = {
     val sortSeq = s.sortWith(_ < _)
-    if (s.length % 2 == 0) (s(s.length / 2 - 1) + s(s.length / 2)) / 2
-    else s(s.length / 2)
+    if (sortSeq.length % 2 == 0) (sortSeq(sortSeq.length / 2 - 1) + sortSeq(sortSeq.length / 2)) / 2
+    else sortSeq(sortSeq.length / 2)
   }
 
-  def formatResults(dataFormats: Seq[String], useIndexes: Seq[Boolean],
-                    resMap: HashMap[String, Seq[ArrayBuffer[Int]]],
+  def formatResults(res: Seq[(String, Seq[ArrayBuffer[Int]])],
                     queryNums: Int, testTimes: Int): Unit = {
-    val res = dataFormats.flatMap(dataFormat =>
-      useIndexes.map(useIndex =>
-        (s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
-          resMap.get(s"${dataFormat}-${useIndex}").get)
-      )
-    )
-    for(i <- 1 to queryNums) {
+    for (i <- 1 to queryNums) {
       val header = Seq(s"Q${i}") ++ (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Median/ms")
       val content = res.map(x =>
         Seq(x._1) ++ x._2.map(_(i - 1)) ++ Seq(median(x._2.map(_(i - 1))))

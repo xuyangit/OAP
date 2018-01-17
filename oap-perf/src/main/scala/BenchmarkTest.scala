@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+package org.apache.spark.sql.oap.perf
+
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import sys.process._
@@ -53,7 +55,7 @@ object BenchmarkTest {
     // enable to test Oap strategies
     val testStrategy = args(5)
 
-    // enable use of statistics manager
+    // enable use of statistics manager, this doesn't impact oap strategies queries
     val enableStatistics = args(6)
 
     val testTimes = args(7).toInt
@@ -65,7 +67,6 @@ object BenchmarkTest {
         .enableHiveSupport().getOrCreate()
       spark.sqlContext.setConf("spark.sql.oap.oindex.enabled", s"${useIndex}")
       spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
-      spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", enableStatistics)
       spark
     }
 
@@ -153,7 +154,7 @@ object BenchmarkTest {
       // OapGroupAggregateStrategy query, this works for both
       TestUtil.queryTime(
         spark.sql(
-          s"SELECT $btreeIndexAttr, max(${bitmapIndexAttr}) FROM $table " +
+          s"SELECT max(${btreeIndexAttr}) FROM $table " +
             s"WHERE $bitmapIndexAttr IN ( $msRange ) AND " +
             s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
             s"GROUP BY $bitmapIndexAttr"
@@ -161,7 +162,7 @@ object BenchmarkTest {
       )
       TestUtil.queryTime(
         spark.sql(
-          s"SELECT $bitmapIndexAttr, max(${btreeIndexAttr}) FROM $table " +
+          s"SELECT max(${bitmapIndexAttr}) FROM $table " +
             s"WHERE $bitmapIndexAttr = 20 AND " +
             s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
             s"GROUP BY $btreeIndexAttr"
@@ -261,27 +262,45 @@ object BenchmarkTest {
             cleanAfterEach(spark)
           })
         })
-        TestUtil.formatResults(dataFormats, useIndexes, resMap, queryNums, testTimes)
+        val res = dataFormats.flatMap(dataFormat =>
+          useIndexes.map(useIndex =>
+            (s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
+              resMap.get(s"${dataFormat}-${useIndex}").get)
+          )
+        )
+        TestUtil.formatResults(res, queryNums, testTimes)
       }
     })
 
-    // Oap strategies only work for Oap data format
+    /**
+     * We compare the performance under following three settings:
+     * 1）Disable index selection
+     * 2）Enable index selection but disable file and stats policy
+     * 3) Enable index selection and both two policies (default mode)
+     */
     if (testStrategy == "true" && dataFormats.contains("oap")) {
       println("Test results of Oap Strategies:")
       val dataFormat = "oap"
       val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
       var queryNums = 0
-      useIndexes.foreach(useIndex => {
-        val spark = getSession(useIndex)
+      val testOptions = Seq(
+        ("eis_disabled", "false", "false", "false"),
+        ("eis_enabled_policies_disabled", "true", "false", "false"),
+        ("all_enabled", "true", "true", "true")
+      )
+      testOptions.foreach(option => {
+        val spark = getSession(true)
+        spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", option._2)
+        spark.sqlContext.setConf("spark.sql.oap.oindex.file.policy", option._3)
+        spark.sqlContext.setConf("spark.sql.oap.oindex.statistics.policy", option._4)
         spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
-        resMap.put(s"${dataFormat}-${useIndex}", (1 to testTimes)
+        resMap.put(option._1, (1 to testTimes)
           .map(_ => testOapStrategy(spark)))
-        queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
+        queryNums = resMap.get(option._1).get(0).size
         cleanAfterEach(spark)
       })
-      TestUtil.formatResults(Seq("oap"), useIndexes, resMap, queryNums, testTimes)
+      val res = testOptions.map(option => (option._1, resMap.get(option._1).get))
+      TestUtil.formatResults(res, queryNums, testTimes)
     }
-
-
   }
 }

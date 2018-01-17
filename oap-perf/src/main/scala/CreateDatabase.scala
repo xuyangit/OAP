@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+package org.apache.spark.sql.oap.perf
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 

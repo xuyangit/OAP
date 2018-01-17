@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+package org.apache.spark.sql.oap.perf
+
 import com.databricks.spark.sql.perf.tpcds.Tables
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
