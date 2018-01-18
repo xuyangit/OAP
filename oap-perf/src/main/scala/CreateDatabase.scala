@@ -23,7 +23,7 @@ import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.functions._
 
-object CreateDatabaseApp {
+object CreateDatabase {
 
   def main(args: Array[String]) {
     if (args.length < 4) {

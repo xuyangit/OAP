@@ -29,7 +29,7 @@ import org.apache.spark.sql.types.IntegerType
  * should throw exception for more than 2g rows partition.
  * This will be extended to more pressure tests later.
  */
-object RowIdTestApp {
+object RowIdTest {
 
   def main(args: Array[String]) {
     if (args.length < 1) {

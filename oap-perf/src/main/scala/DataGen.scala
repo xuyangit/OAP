@@ -25,7 +25,7 @@ import org.apache.spark.sql.SparkSession
  * Gen data using TPCDS dataset. We use store_sales table for B-Tree and Bitmap index,
  * and customer table for Trie index.
  */
-object DataGenApp {
+object DataGen {
   def main(args: Array[String]) {
     if (args.length < 3) {
       sys.error("Please config the version of OAP to test!")

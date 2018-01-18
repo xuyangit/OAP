@@ -67,6 +67,7 @@ object BenchmarkTest {
         .enableHiveSupport().getOrCreate()
       spark.sqlContext.setConf("spark.sql.oap.oindex.enabled", s"${useIndex}")
       spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
+      spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", enableStatistics)
       spark
     }
 

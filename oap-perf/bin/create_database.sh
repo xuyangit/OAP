@@ -5,7 +5,7 @@
 
 
 ${sparkPath}/bin/spark-submit \
-	--class CreateDatabaseApp \
+	--class ${packagePath}.CreateDatabase \
 	--master yarn \
 	--deploy-mode client \
 	$benchmarkJarPath \
