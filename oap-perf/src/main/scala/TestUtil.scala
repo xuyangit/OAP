@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.oap.perf
-
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.hadoop.conf.Configuration

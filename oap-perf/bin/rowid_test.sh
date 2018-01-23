@@ -1,6 +1,6 @@
 #!/bin/sh
 bin/spark-submit \
-	--class ${packagePath}.RowIdTest \
+	--class RowIdTest \
 	--master yarn \
 	--deploy-mode client \
 	$benchmarkJarPath \

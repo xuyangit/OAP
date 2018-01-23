@@ -4,7 +4,7 @@
 . ./benchmark.config
 
 ${sparkPath}/bin/spark-submit \
-	--class ${packagePath}.DataGen \
+	--class DataGen \
 	--master yarn \
 	--deploy-mode client \
 	$benchmarkJarPath \

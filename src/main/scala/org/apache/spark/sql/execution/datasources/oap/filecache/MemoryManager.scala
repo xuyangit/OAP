@@ -39,24 +39,22 @@ trait FiberCache extends Logging {
   protected def fiberData: MemoryBlock
 
   @GuardedBy("FiberCache.this")
-  private var _refCount: Long = 0L
-  def refCount: Long = _refCount
+  private var _refCount: AtomicLong = new AtomicLong(0)
+  def refCount: Long = _refCount.get()
 
-  def occupy(): Unit = synchronized {
-    _refCount += 1
-  }
+  def occupy(): Unit = _refCount.addAndGet(1)
 
-  def release(): Unit = synchronized {
+  def release(): Unit = {
     assert(refCount > 0, "release a non-used fiber")
-    _refCount -= 1
+    _refCount.addAndGet(-1)
     notifyAll()
   }
 
-  def tryDispose(timeout: Long): Boolean = synchronized {
+  def tryDispose(timeout: Long): Boolean = {
     val startTime = System.currentTimeMillis()
     // Give caller a chance to deal with the long wait case.
     while (System.currentTimeMillis() - startTime <= timeout) {
-      if (_refCount > 0) {
+      if (_refCount.get() > 0) {
         try {
           wait(100)
         } catch {

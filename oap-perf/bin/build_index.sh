@@ -7,7 +7,7 @@ hadoop fs -rm -r /user/oap/oaptest/oap-0."$oapVersionNum".0/tpcds/tpcds"$dataSca
 hadoop fs -rm -r /user/oap/oaptest/oap-0."$oapVersionNum".0/tpcds/tpcds"$dataScale"/parquet/store_sales/*.index
 
 ${sparkPath}/bin/spark-submit \
-	--class ${packagePath}.IndexBuilder \
+	--class IndexBuilder \
 	--master yarn \
 	--deploy-mode client \
 	$benchmarkJarPath \

@@ -99,11 +99,11 @@ object FiberCacheManager extends Logging {
     }
   }
 
-  def get(fiber: Fiber, conf: Configuration): FiberCache = synchronized {
+  def get(fiber: Fiber, conf: Configuration): FiberCache = {
     cacheBackend.get(fiber, conf)
   }
 
-  def removeIndexCache(indexName: String): Unit = synchronized {
+  def removeIndexCache(indexName: String): Unit = {
     logDebug(s"going to remove cache of $indexName, executor: ${SparkEnv.get.executorId}")
     logDebug("cache size before remove: " + cacheBackend.cacheCount)
     val fiberToBeRemoved = cacheBackend.getFibers.filter {
@@ -116,7 +116,7 @@ object FiberCacheManager extends Logging {
   }
 
   // Used by test suite
-  private[filecache] def removeFiber(fiber: TestFiber): Unit = synchronized {
+  private[filecache] def removeFiber(fiber: TestFiber): Unit = {
     // cache may be removed by other thread before invalidate
     // but it's ok since only used by test to simulate race condition
     if (cacheBackend.getIfPresent(fiber) != null) cacheBackend.invalidate(fiber)

@@ -7,9 +7,9 @@ This module uses SBT-1.0.2 to build itself. Before running "sbt assembly" to bui
 ## Workflow
 * Firstly please run "sbt assembly" to build the necessary jar file for testing under the oap-perf directory.
 * Setting bin/benchmark.config for all settings of benchmark workflows.
-* Run bin/runDataGen.sh to generate tpcds data in hdfs.
-* Run bin/runCreateDatabase.sh to transform table (e.g, remove null values, scale values of index attributes) and generate table.
-* Run bin/runIndexBuild.sh to generate index.
-* Run bin/runBenchmarkTest.sh to generate benchmark results. Notice as we use clear cache commands in scala code, which needs sudo operation, you'd better run sudo bin/runBenchmarkTest.sh. Though the command won't throw execption if not executed as sudoers, there maybe impact on final results.
+* Run bin/gen_data.sh to generate tpcds data in hdfs.
+* Run bin/create_database.sh to transform table (e.g, remove null values, scale values of index attributes) and generate table.
+* Run bin/build_index.sh to generate index.
+* Run bin/benchmark_test.sh to generate benchmark results. Notice as we use clear cache commands in scala code, which needs sudo operation, you'd better run sudo bin/runBenchmarkTest.sh. Though the command won't throw execption if not executed as sudoers, there maybe impact on final results.
 
 Normally you just run the first 5 steps for preparation and don't need to run them again. Besides, please run these steps under oap-perf directory or at least from a fixed directory. The reason is Spark creates a metastore_db directory under your execution directory to store database catalog. 

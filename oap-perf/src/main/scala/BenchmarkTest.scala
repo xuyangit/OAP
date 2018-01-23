@@ -15,15 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.oap.perf
-
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import sys.process._
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.execution.datasources.oap.OapStrategies
 
-object BenchmarkTest {
+object BenchmarkTest extends OapStrategies {
   def main(args: Array[String]) {
     if (args.length < 8) {
       sys.error("Please config the arguments for testing!")
@@ -86,7 +85,7 @@ object BenchmarkTest {
       val attr = "ss_ticket_number"
       implicit val resList = ArrayBuffer[Int]()
       // Single column query
-      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table").foreach{ _ => })
+      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < ${Int.MaxValue}").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 2000000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 100000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 10000").foreach{ _ => })
@@ -135,7 +134,7 @@ object BenchmarkTest {
         spark.sql(
           s"SELECT * FROM $table s1 WHERE EXISTS " +
             s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
-            s"AND s1.$bitmapIndexAttr IN ( $lsRange ))"
+            s"AND s2.$bitmapIndexAttr IN ( $lsRange ))"
         ).foreach{ _ => }
       )
       TestUtil.queryTime(
@@ -291,6 +290,7 @@ object BenchmarkTest {
       )
       testOptions.foreach(option => {
         val spark = getSession(true)
+        spark.experimental.extraStrategies = oapStrategies
         spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", option._2)
         spark.sqlContext.setConf("spark.sql.oap.oindex.file.policy", option._3)
         spark.sqlContext.setConf("spark.sql.oap.oindex.statistics.policy", option._4)
@@ -298,6 +298,7 @@ object BenchmarkTest {
         resMap.put(option._1, (1 to testTimes)
           .map(_ => testOapStrategy(spark)))
         queryNums = resMap.get(option._1).get(0).size
+        spark.experimental.extraStrategies = null
         cleanAfterEach(spark)
       })
       val res = testOptions.map(option => (option._1, resMap.get(option._1).get))

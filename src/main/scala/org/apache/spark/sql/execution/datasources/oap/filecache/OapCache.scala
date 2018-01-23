@@ -19,12 +19,11 @@ package org.apache.spark.sql.execution.datasources.oap.filecache
 
 import java.util.concurrent.Callable
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
 
 import scala.collection.JavaConverters._
-
 import com.google.common.cache._
 import org.apache.hadoop.conf.Configuration
-
 import org.apache.spark.internal.Logging
 
 trait OapCache {
@@ -110,9 +109,13 @@ class GuavaOapCache(cacheMemory: Long, cacheGuardianMemory: Long) extends OapCac
         logDebug(s"Loading Cache: $fiber")
         val fiberCache = fiber.fiber2Data(configuration)
         _cacheSize.addAndGet(fiberCache.size())
+        fiberCache.occupy()
         fiberCache
       }
     }
+
+  private val lock = new ReentrantLock()
+  lock.unlock()
 
   private val cache = CacheBuilder.newBuilder()
     .recordStats()
@@ -125,7 +128,6 @@ class GuavaOapCache(cacheMemory: Long, cacheGuardianMemory: Long) extends OapCac
     val fiberCache = cache.get(fiber, cacheLoader(fiber, conf))
     // Avoid loading a fiber larger than MAX_WEIGHT / 4, 4 is concurrency number
     assert(fiberCache.size() <= MAX_WEIGHT * MB / 4, "Can't cache fiber larger than MAX_WEIGHT / 4")
-    fiberCache.occupy()
     fiberCache
   }
 

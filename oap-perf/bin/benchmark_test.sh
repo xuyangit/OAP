@@ -11,7 +11,7 @@
 
 
 ${sparkPath}/bin/spark-submit \
-	--class ${packagePath}.BenchmarkTest \
+	--class BenchmarkTest \
 	--master yarn \
 	--deploy-mode client \
 	$benchmarkJarPath \

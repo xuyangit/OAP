@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.oap.perf
-
 import org.apache.spark.sql.SparkSession
 
 object IndexBuilderApp {
