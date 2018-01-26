@@ -40,8 +40,8 @@ object RowIdTest {
     val oapDataLocation = s"oaptest/oap-0.${versionNum}.0/tpcds/tpcds1000/oap/"
 
     tables.genData(oapDataLocation, "oap", true, false, true, false, false, "store_sales", 4)
-    spark.sql("create database if not exists oaptpcds1000")
-    spark.sql("use oaptpcds1000")
+    spark.sql("create database if not exists oap_tpcds_1000")
+    spark.sql("use oap_tpcds_1000")
     spark.sql("drop table if exists largetable")
     spark.sql("drop table if exists normaltable")
 

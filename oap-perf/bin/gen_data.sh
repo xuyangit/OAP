@@ -11,4 +11,5 @@ ${sparkPath}/bin/spark-submit \
 	$oapVersionNum \
 	$dataScale \
 	$testTrie \
-	$dataPartitions
+	$dataPartitions \
+	$hdfsPath

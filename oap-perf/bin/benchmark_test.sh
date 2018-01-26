@@ -23,6 +23,7 @@ ${sparkPath}/bin/spark-submit \
 	$testOapStrategy \
 	$enableStatistic \
 	$benchmarkTestTimes \
+	$cmpBitmapAndBtree \
 	> $benchmarkResPath
 # for profiler use
 # --conf "spark.executor.extraJavaOptions=-javaagent:statsd-jvm-profiler-2.1.1-SNAPSHOT-jar-with-dependencies.jar=server=10.1.2.130<Plug>PeepOpenort=8086,reporter=InfluxDBReporter,                database=profiler,username=profiler<Plug>PeepOpenassword=profiler<Plug>PeepOpenrefix="$format",tagMapping="$format \

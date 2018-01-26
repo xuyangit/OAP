@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+import scala.collection.immutable.Nil
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import sys.process._
@@ -24,7 +25,7 @@ import org.apache.spark.sql.execution.datasources.oap.OapStrategies
 
 object BenchmarkTest extends OapStrategies {
   def main(args: Array[String]) {
-    if (args.length < 8) {
+    if (args.length < 9) {
       sys.error("Please config the arguments for testing!")
     }
     // e.g., 2 for 0.2.0
@@ -61,6 +62,10 @@ object BenchmarkTest extends OapStrategies {
 
     if(testTimes < 1) sys.error("Test times should be positive!")
 
+    val cmpBitmapAndBtree = args(8)
+
+    var curQueries: Seq[(String, String)] = _
+
     def getSession(useIndex: Boolean): SparkSession = {
       val spark = SparkSession.builder.appName(s"OAP-Test-${versionNum}.0")
         .enableHiveSupport().getOrCreate()
@@ -85,7 +90,8 @@ object BenchmarkTest extends OapStrategies {
       val attr = "ss_ticket_number"
       implicit val resList = ArrayBuffer[Int]()
       // Single column query
-      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < ${Int.MaxValue}").foreach{ _ => })
+      TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < ${Int.MaxValue}")
+        .foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 2000000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 100000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $attr < 10000").foreach{ _ => })
@@ -117,6 +123,7 @@ object BenchmarkTest extends OapStrategies {
 
     def testOapStrategy(spark: SparkSession): ArrayBuffer[Int] = {
       val table = "store_sales"
+      val leftTable = "store_sales_dup"
       val btreeIndexAttr = "ss_ticket_number"
       val bitmapIndexAttr = "ss_item_sk1"
       val lsRange = (1 to 10).mkString(",")
@@ -124,31 +131,32 @@ object BenchmarkTest extends OapStrategies {
       implicit val resList = ArrayBuffer[Int]()
       // OapSortLimitStrategy query, this works for B-Tree only
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $btreeIndexAttr > 100 AND" +
-        s" $btreeIndexAttr < 1000 ORDER BY $btreeIndexAttr LIMIT 100").foreach{ _ => })
+        s" $btreeIndexAttr < 10000 ORDER BY $btreeIndexAttr LIMIT 10000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table ORDER BY $btreeIndexAttr" +
         " LIMIT 10000").foreach{ _ => })
       TestUtil.queryTime(spark.sql(s"SELECT * FROM $table WHERE $btreeIndexAttr BETWEEN 3000 AND" +
         s" 20000 ORDER BY $btreeIndexAttr LIMIT 100000").foreach{ _ => })
-      // OAPSemiJoinStrategy query, this works for Bitmap only
+      // OAPSemiJoinStrategy query, this works for Bitmap only currently.
+      // Should perform on two different tables
       TestUtil.queryTime(
         spark.sql(
-          s"SELECT * FROM $table s1 WHERE EXISTS " +
+          s"SELECT * FROM $leftTable s1 WHERE EXISTS " +
+            s"(SELECT 1 FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
+            s"AND s2.$bitmapIndexAttr = 20)"
+        ).foreach{ _ => }
+      )
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT * FROM $leftTable s1 WHERE EXISTS " +
+            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
+            s"AND s2.$bitmapIndexAttr IN ( $msRange ))"
+        ).foreach{ _ => }
+      )
+      TestUtil.queryTime(
+        spark.sql(
+          s"SELECT * FROM $leftTable s1 WHERE EXISTS " +
             s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
             s"AND s2.$bitmapIndexAttr IN ( $lsRange ))"
-        ).foreach{ _ => }
-      )
-      TestUtil.queryTime(
-        spark.sql(
-          s"SELECT * FROM $table s1 WHERE EXISTS " +
-            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
-            s"AND s1.$bitmapIndexAttr IN ( $msRange ))"
-        ).foreach{ _ => }
-      )
-      TestUtil.queryTime(
-        spark.sql(
-          s"SELECT * FROM $table s1 WHERE EXISTS " +
-            s"(SELECT * FROM $table s2 WHERE s1.$bitmapIndexAttr = s2.$bitmapIndexAttr " +
-            s"AND s1.$bitmapIndexAttr = 25)"
         ).foreach{ _ => }
       )
       // OapGroupAggregateStrategy query, this works for both
@@ -156,15 +164,14 @@ object BenchmarkTest extends OapStrategies {
         spark.sql(
           s"SELECT max(${btreeIndexAttr}) FROM $table " +
             s"WHERE $bitmapIndexAttr IN ( $msRange ) AND " +
-            s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
+            s"$btreeIndexAttr BETWEEN 1 AND 1000000 " +
             s"GROUP BY $bitmapIndexAttr"
         ).foreach{ _ => }
       )
       TestUtil.queryTime(
         spark.sql(
-          s"SELECT max(${bitmapIndexAttr}) FROM $table " +
-            s"WHERE $bitmapIndexAttr = 20 AND " +
-            s"$btreeIndexAttr BETWEEN 1 AND 10000 " +
+          s"SELECT $btreeIndexAttr, max(${bitmapIndexAttr}) FROM $table " +
+            s"WHERE $btreeIndexAttr < 1000000 " +
             s"GROUP BY $btreeIndexAttr"
         ).foreach{ _ => }
       )
@@ -239,6 +246,56 @@ object BenchmarkTest extends OapStrategies {
       resList
     }
 
+    def compareBitmapAndBtree(spark: SparkSession, originTable: String,
+                              cmpTable: String): ArrayBuffer[Int] = {
+      implicit val resList = ArrayBuffer[Int]()
+      val lsRange = (1 to 10).mkString(",")
+      val msRange = (1 to 5).mkString(",")
+      val attrs: Seq[(String, String)] =
+        (originTable, "ss_quantity") ::
+        (originTable, "ss_promo_sk") ::
+        (originTable, "ss_item_sk1") ::
+        (cmpTable, "ss_ticket_number") :: Nil
+      curQueries = attrs.flatMap { case (table, attr) =>
+        Seq(
+          (s"SELECT * FROM $table WHERE $attr in ( $lsRange )", s"large range query on $attr"),
+          (s"SELECT * FROM $table WHERE $attr in ( $msRange )", s"medium range query on $attr"),
+          (s"SELECT * FROM $table WHERE $attr = 10", s"equal value query on $attr"),
+          (s"SELECT * FROM $table WHERE $attr in ( $msRange ) AND ss_list_price < 100.0",
+            s"medium range query on ${attr} and two columns filters")
+        )
+      }
+      curQueries.foreach(query => TestUtil.queryTime(query._1))
+      resList
+    }
+
+    if(cmpBitmapAndBtree == "true") {
+      val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
+      var testBitmap = Seq(true, false)
+      dataFormats.foreach(dataFormat => {
+        useIndexes.foreach(useIndex => {
+          if (useIndex) testBitmap = Seq(true)
+          else testBitmap = Seq(true, false)
+          testBitmap.foreach(bitmapFlag => {
+            val spark = getSession(useIndex)
+            spark.sql(s"USE ${dataFormat}_tpcds_${dataScale}")
+            resMap.put(s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}" +
+              s"-${if (bitmapFlag) "Bitmap" else "BTree"}",
+              (1 to testTimes).map(_ =>
+                compareBitmapAndBtree(
+                  spark,
+                  if (bitmapFlag) "store_sales" else "store_sales_dup",
+                  if (bitmapFlag) "store_sales_dup" else "store_sales")
+              )
+            )
+            cleanAfterEach(spark)
+          })
+        })
+      })
+      val res = resMap.iterator.toIndexedSeq
+      TestUtil.formatResults(res, curQueries.length, testTimes, curQueries)
+    }
+
     // basic queries for data format + index type + use index / baseline
     Array(1, 2, 4).foreach(indexMask => {
       if ((indexMask & indexFlags) > 0) {
@@ -252,22 +309,18 @@ object BenchmarkTest extends OapStrategies {
         dataFormats.foreach(dataFormat => {
           useIndexes.foreach(useIndex => {
             val spark = getSession(useIndex)
-            spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
-            resMap.put(s"${dataFormat}-${useIndex}", indexMask match {
-              case 1 => (1 to testTimes).map(_ => testForTrieIndex(spark))
-              case 2 => (1 to testTimes).map(_ => testForBitmapIndex(spark))
-              case _ => (1 to testTimes).map(_ => testForBtreeIndex(spark))
+            spark.sql(s"USE ${dataFormat}_tpcds_${dataScale}")
+            resMap.put(s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
+              indexMask match {
+                case 1 => (1 to testTimes).map(_ => testForTrieIndex(spark))
+                case 2 => (1 to testTimes).map(_ => testForBitmapIndex(spark))
+                case _ => (1 to testTimes).map(_ => testForBtreeIndex(spark))
             })
             queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
             cleanAfterEach(spark)
           })
         })
-        val res = dataFormats.flatMap(dataFormat =>
-          useIndexes.map(useIndex =>
-            (s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}",
-              resMap.get(s"${dataFormat}-${useIndex}").get)
-          )
-        )
+        val res = resMap.iterator.toIndexedSeq
         TestUtil.formatResults(res, queryNums, testTimes)
       }
     })
@@ -294,7 +347,9 @@ object BenchmarkTest extends OapStrategies {
         spark.sqlContext.setConf("spark.sql.oap.oindex.eis.enabled", option._2)
         spark.sqlContext.setConf("spark.sql.oap.oindex.file.policy", option._3)
         spark.sqlContext.setConf("spark.sql.oap.oindex.statistics.policy", option._4)
-        spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
+        spark.sqlContext.setConf("spark.sql.autoBroadcastJoinThreshold",
+          s"${1024L * 1024 * 1024 * 100}")
+        spark.sql(s"USE ${dataFormat}_tpcds_${dataScale}")
         resMap.put(option._1, (1 to testTimes)
           .map(_ => testOapStrategy(spark)))
         queryNums = resMap.get(option._1).get(0).size

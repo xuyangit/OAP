@@ -3,7 +3,6 @@
 # first source config
 . ./benchmark.config
 
-
 ${sparkPath}/bin/spark-submit \
 	--class CreateDatabase \
 	--master yarn \
@@ -13,4 +12,5 @@ ${sparkPath}/bin/spark-submit \
 	$benchmarkFormats \
 	$dataScale \
 	$testTrie \
+	$hdfsPath \
 	1> $fileInfoPath

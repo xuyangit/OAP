@@ -90,9 +90,12 @@ object TestUtil {
   }
 
   def formatResults(res: Seq[(String, Seq[ArrayBuffer[Int]])],
-                    queryNums: Int, testTimes: Int): Unit = {
+                    queryNums: Int, testTimes: Int,
+                    queries: Seq[(String, String)] = Seq.empty): Unit = {
     for (i <- 1 to queryNums) {
-      val header = Seq(s"Q${i}") ++ (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Median/ms")
+      val queryTag = if (queries.nonEmpty) queries(i)._2 else ""
+      val header = Seq(s"Q${i}: ${queryTag}") ++
+        (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Median/ms")
       val content = res.map(x =>
         Seq(x._1) ++ x._2.map(_(i - 1)) ++ Seq(median(x._2.map(_(i - 1))))
       )

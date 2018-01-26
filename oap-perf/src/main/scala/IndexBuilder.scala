@@ -17,9 +17,9 @@
 
 import org.apache.spark.sql.SparkSession
 
-object IndexBuilderApp {
+object IndexBuilder {
   def main(args: Array[String]) {
-    if (args.length < 4) {
+    if (args.length < 6) {
       sys.error("Please config the arguments for testing!")
     }
     
@@ -35,13 +35,13 @@ object IndexBuilderApp {
     val dataScale = args(2)
     // 7=111 to test all indexes, 5=101 to test B-tree and trie, 6=110 to test B-tree and Bitmap
     val indexFlag = args(3).toInt
+    val hdfsPath = args(4)
+    val cmpBitmapAndBtree = args(5)
     val spark = SparkSession.builder.appName(s"OAP-Test-${versionNum}.0").
       enableHiveSupport().getOrCreate()
     spark.sqlContext.setConf("spark.sql.parquet.compression.codec", "gzip")
 
-    def buildBtreeIndex(tablePath: String): Unit = {
-      val table = "store_sales"
-      val attr = "ss_ticket_number"
+    def buildBtreeIndex(tablePath: String, table: String, attr: String): Unit = {
       try {
         spark.sql(s"DROP OINDEX ${table}_${attr}_index ON $table")
       } catch {
@@ -51,16 +51,14 @@ object IndexBuilderApp {
           spark.sql(
             s"CREATE OINDEX IF NOT EXISTS ${table}_${attr}_index ON $table ($attr) USING BTREE"
           ),
-          s"Create B-Tree index on $table cost "
+          s"Create B-Tree index on ${table}(${attr}) cost "
         )
-        println(s"The size of B-Tree index on $table cost :" +
+        println(s"The size of B-Tree index on ${table}(${attr}) cost :" +
           TestUtil.calculateIndexSize(table, tablePath, attr))
       }
     }
 
-    def buildTrieIndex(tablePath: String): Unit = {
-      val table = "customer"
-      val attr = "c_email_address"
+    def buildTrieIndex(tablePath: String, table: String, attr: String): Unit = {
       try {
         spark.sql(s"DROP OINDEX ${table}_${attr}_index ON $table")
       } catch {
@@ -70,16 +68,14 @@ object IndexBuilderApp {
           spark.sql(
             s"CREATE OINDEX IF NOT EXISTS ${table}_${attr}_index ON $table ($attr)"
           ),
-          s"Create Trie index on $table cost"
+          s"Create Trie index on ${table}(${attr}) cost"
         )
-        println(s"The size of Trie index on $table cost :" +
+        println(s"The size of Trie index on ${table}(${attr}) cost :" +
           TestUtil.calculateIndexSize(table, tablePath, attr))
       }
     }
 
-    def buildBitmapIndex(tablePath: String): Unit = {
-      val table = "store_sales"
-      val attr = "ss_item_sk1"
+    def buildBitmapIndex(tablePath: String, table: String, attr: String): Unit = {
       try {
         spark.sql(s"DROP OINDEX ${table}_${attr}_index ON $table")
       } catch {
@@ -89,20 +85,29 @@ object IndexBuilderApp {
           spark.sql(
             s"CREATE OINDEX IF NOT EXISTS ${table}_${attr}_index ON $table ($attr) USING BITMAP"
           ),
-          s"Create Bitmap index on $table cost"
+          s"Create Bitmap index on ${table}(${attr}) cost"
         )
-        println(s"The size of Bitmap index on $table cost :" +
+        println(s"The size of Bitmap index on ${table}(${attr}) cost :" +
           TestUtil.calculateIndexSize(table, tablePath, attr))
       }
     }
 
     dataFormats.foreach(dataFormat => {
-      spark.sql(s"USE ${dataFormat}tpcds${dataScale}")
-      val tablePath: String = "hdfs:///user/oap/oaptest/" +
+      spark.sql(s"USE ${dataFormat}_tpcds_${dataScale}")
+      val tablePath: String = hdfsPath +
         s"oap-0.${versionNum}.0/tpcds/tpcds${dataScale}/${dataFormat}/"
-      if((indexFlag & 4) > 0) buildBtreeIndex(tablePath)
-      if((indexFlag & 2) > 0) buildBitmapIndex(tablePath)
-      if((indexFlag & 1) > 0) buildTrieIndex(tablePath)
+      if((indexFlag & 4) > 0) buildBtreeIndex(tablePath, "store_sales", "ss_ticket_number")
+      if((indexFlag & 2) > 0) buildBitmapIndex(tablePath, "store_sales", "ss_item_sk1")
+      if((indexFlag & 1) > 0) buildTrieIndex(tablePath, "customer", "c_email_address")
+      if(cmpBitmapAndBtree == "true") {
+        // ss_quantity varys among [1,100] and ss_promo_sk [1, 450]
+        buildBitmapIndex(tablePath, "store_sales", "ss_quantity")
+        buildBitmapIndex(tablePath, "store_sales", "ss_promo_sk")
+        buildBtreeIndex(tablePath, "store_sales_dup", "ss_item_sk1")
+        buildBtreeIndex(tablePath, "store_sales_dup", "ss_quantity")
+        buildBtreeIndex(tablePath, "store_sales_dup", "ss_promo_sk")
+        buildBitmapIndex(tablePath, "store_sales_dup", "ss_ticket_number")
+      }
     })
     spark.stop()
   }
