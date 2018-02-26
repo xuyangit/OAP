@@ -39,8 +39,8 @@ object DataGen {
       val hdfsPath = args(4)
 
       val tables1 = new Tables(spark.sqlContext, "/home/oap/tpcds-kit/tools", scale)
-      val oapLoc = s"${hdfsPath}/oap-0.${versionNum}.0/tpcds/tpcds$scale/oap/"
-      val parquetLoc = s"${hdfsPath}oaptest/oap-0.${versionNum}.0/tpcds/tpcds$scale/parquet/"
+      val oapLoc = s"${hdfsPath}oap-0.${versionNum}.0/tpcds/tpcds$scale/oap/"
+      val parquetLoc = s"${hdfsPath}oap-0.${versionNum}.0/tpcds/tpcds$scale/parquet/"
       tables1.genData(oapLoc, "oap", true, false, true, false, false,
         "store_sales", partitions)
       tables1.genData(parquetLoc, "parquet", true, false, true, false, false,

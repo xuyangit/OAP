@@ -93,7 +93,7 @@ object TestUtil {
                     queryNums: Int, testTimes: Int,
                     queries: Seq[(String, String)] = Seq.empty): Unit = {
     for (i <- 1 to queryNums) {
-      val queryTag = if (queries.nonEmpty) queries(i)._2 else ""
+      val queryTag = if (queries.nonEmpty) queries(i - 1)._2 else ""
       val header = Seq(s"Q${i}: ${queryTag}") ++
         (1 to testTimes).map("T" + _ +"/ms") ++ Seq("Median/ms")
       val content = res.map(x =>

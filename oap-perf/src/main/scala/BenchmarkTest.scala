@@ -64,7 +64,7 @@ object BenchmarkTest extends OapStrategies {
 
     val cmpBitmapAndBtree = args(8)
 
-    var curQueries: Seq[(String, String)] = _
+    var curQueries: Seq[(String, String)] = Seq.empty
 
     def getSession(useIndex: Boolean): SparkSession = {
       val spark = SparkSession.builder.appName(s"OAP-Test-${versionNum}.0")
@@ -274,13 +274,13 @@ object BenchmarkTest extends OapStrategies {
       var testBitmap = Seq(true, false)
       dataFormats.foreach(dataFormat => {
         useIndexes.foreach(useIndex => {
-          if (useIndex) testBitmap = Seq(true)
-          else testBitmap = Seq(true, false)
+          if (useIndex) testBitmap = Seq(true, false)
+          else testBitmap = Seq(true)
           testBitmap.foreach(bitmapFlag => {
             val spark = getSession(useIndex)
             spark.sql(s"USE ${dataFormat}_tpcds_${dataScale}")
             resMap.put(s"${dataFormat}-${if (useIndex) "with-index" else "without-index"}" +
-              s"-${if (bitmapFlag) "Bitmap" else "BTree"}",
+              s"-${if (!useIndex) "" else if (bitmapFlag) "Bitmap" else "BTree"}",
               (1 to testTimes).map(_ =>
                 compareBitmapAndBtree(
                   spark,
@@ -305,7 +305,6 @@ object BenchmarkTest extends OapStrategies {
           case 4 => "Test results of Btree index:"
         })
         val resMap = HashMap[String, Seq[ArrayBuffer[Int]]]()
-        var queryNums = 0
         dataFormats.foreach(dataFormat => {
           useIndexes.foreach(useIndex => {
             val spark = getSession(useIndex)
@@ -316,12 +315,11 @@ object BenchmarkTest extends OapStrategies {
                 case 2 => (1 to testTimes).map(_ => testForBitmapIndex(spark))
                 case _ => (1 to testTimes).map(_ => testForBtreeIndex(spark))
             })
-            queryNums = resMap.get(s"${dataFormat}-${useIndex}").get(0).size
             cleanAfterEach(spark)
           })
         })
-        val res = resMap.iterator.toIndexedSeq
-        TestUtil.formatResults(res, queryNums, testTimes)
+        val res = resMap.iterator.toIndexedSeq.sortBy(_._1)
+        TestUtil.formatResults(res, res(0)._2(0).length, testTimes)
       }
     })
 
